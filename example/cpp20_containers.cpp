@@ -5,7 +5,6 @@
  */
 
 #include <boost/redis/connection.hpp>
-#include <boost/asio/deferred.hpp>
 #include <boost/asio/detached.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <map>
@@ -22,7 +21,6 @@ using boost::redis::ignore;
 using boost::redis::config;
 using boost::redis::connection;
 using boost::asio::awaitable;
-using boost::asio::deferred;
 using boost::asio::detached;
 using boost::asio::consign;
 
@@ -51,7 +49,7 @@ auto store(std::shared_ptr<connection> conn) -> awaitable<void>
    req.push_range("RPUSH", "rpush-key", vec);
    req.push_range("HSET", "hset-key", map);
 
-   co_await conn->async_exec(req, ignore, deferred);
+   co_await conn->async_exec(req, ignore);
 }
 
 auto hgetall(std::shared_ptr<connection> conn) -> awaitable<void>
@@ -64,7 +62,7 @@ auto hgetall(std::shared_ptr<connection> conn) -> awaitable<void>
    response<std::map<std::string, std::string>> resp;
 
    // Executes the request and reads the response.
-   co_await conn->async_exec(req, resp, deferred);
+   co_await conn->async_exec(req, resp);
 
    print(std::get<0>(resp).value());
 }
@@ -85,7 +83,7 @@ auto transaction(std::shared_ptr<connection> conn) -> awaitable<void>
       response<std::optional<std::vector<int>>, std::optional<std::map<std::string, std::string>>> // exec
    > resp;
 
-   co_await conn->async_exec(req, resp, deferred);
+   co_await conn->async_exec(req, resp);
 
    print(std::get<0>(std::get<3>(resp).value()).value().value());
    print(std::get<1>(std::get<3>(resp).value()).value().value());
