@@ -6,7 +6,6 @@
 
 #include <boost/redis/connection.hpp>
 #include <boost/redis/resp3/serialization.hpp>
-#include <boost/asio/deferred.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
 #include <boost/asio/consign.hpp>
@@ -76,7 +75,7 @@ asio::awaitable<void> co_main(config cfg)
    response<ignore_t, person> resp;
 
    // Sends the request and receives the response.
-   co_await conn->async_exec(req, resp, asio::deferred);
+   co_await conn->async_exec(req, resp);
    conn->cancel();
 
    std::cout

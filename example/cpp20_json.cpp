@@ -5,7 +5,6 @@
  */
 
 #include <boost/redis/connection.hpp>
-#include <boost/asio/deferred.hpp>
 #include <boost/asio/detached.hpp>
 #include <boost/describe.hpp>
 #include <boost/asio/consign.hpp>
@@ -62,7 +61,7 @@ auto co_main(config cfg) -> asio::awaitable<void>
 
    response<ignore_t, user> resp;
 
-   co_await conn->async_exec(req, resp, asio::deferred);
+   co_await conn->async_exec(req, resp);
    conn->cancel();
 
    // Prints the first ping
