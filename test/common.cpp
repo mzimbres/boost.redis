@@ -52,6 +52,7 @@ boost::redis::config make_test_config()
 {
    boost::redis::config cfg;
    cfg.addr.host = get_server_hostname();
+   cfg.max_read_size = 1000000;
    return cfg;
 }
 

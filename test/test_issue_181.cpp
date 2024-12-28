@@ -36,7 +36,7 @@ BOOST_AUTO_TEST_CASE(issue_181)
    auto const level = boost::redis::logger::level::debug;
    net::io_context ioc;
    auto ctx = net::ssl::context{net::ssl::context::tlsv12_client};
-   basic_connection conn{ioc.get_executor(), std::move(ctx), 1000000};
+   basic_connection conn{ioc.get_executor(), std::move(ctx)};
    net::steady_timer timer{ioc};
    timer.expires_after(std::chrono::seconds{1});
 

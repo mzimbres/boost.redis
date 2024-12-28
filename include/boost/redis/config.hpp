@@ -10,6 +10,7 @@
 #include <string>
 #include <chrono>
 #include <optional>
+#include <limits>
 
 namespace boost::redis
 {
@@ -78,6 +79,13 @@ struct config {
     *  To disable reconnection pass zero as duration.
     */
    std::chrono::steady_clock::duration reconnect_wait_interval = std::chrono::seconds{1};
+
+   /** @brief Maximum size of a socket read.
+    *  
+    *  Sets a limit on how much data is allowed to be read into the
+    *  read buffer. It can be used to prevent DDOS.
+    */
+   std::size_t max_read_size = (std::numeric_limits<std::size_t>::max)();
 };
 
 } // boost::redis

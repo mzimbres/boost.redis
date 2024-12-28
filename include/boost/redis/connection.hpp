@@ -49,7 +49,6 @@
 #include <cstddef>
 #include <deque>
 #include <functional>
-#include <limits>
 #include <memory>
 #include <string_view>
 #include <utility>
@@ -57,13 +56,6 @@
 namespace boost::redis {
 namespace detail
 {
-
-template <class DynamicBuffer>
-std::string_view buffer_view(DynamicBuffer buf) noexcept
-{
-   char const* start = static_cast<char const*>(buf.data(0, buf.size()).data());
-   return std::string_view{start, std::size(buf)};
-}
 
 template <class AsyncReadStream, class DynamicBuffer>
 class append_some_op {
@@ -249,6 +241,8 @@ template <class Conn, class Logger>
 struct reader_op {
    using parse_result = typename Conn::parse_result;
    using parse_ret_type = typename Conn::parse_ret_type;
+   using dyn_buffer_type = asio::dynamic_string_buffer<char, std::char_traits<char>, std::allocator<char>>;
+
    Conn* conn_;
    Logger logger_;
    parse_ret_type res_{parse_result::resp, 0};
@@ -269,14 +263,14 @@ struct reader_op {
                BOOST_ASIO_CORO_YIELD
                async_append_some(
                   conn_->next_layer(),
-                  conn_->dbuf_,
+                  dyn_buffer_type{conn_->read_buffer_, conn_->cfg_.max_read_size},
                   conn_->get_suggested_buffer_growth(),
                   std::move(self));
             } else {
                BOOST_ASIO_CORO_YIELD
                async_append_some(
                   conn_->next_layer().next_layer(),
-                  conn_->dbuf_,
+                  dyn_buffer_type{conn_->read_buffer_, conn_->cfg_.max_read_size},
                   conn_->get_suggested_buffer_growth(),
                   std::move(self));
             }
@@ -301,7 +295,7 @@ struct reader_op {
             }
          }
 
-         res_ = conn_->on_read(buffer_view(conn_->dbuf_), ec);
+         res_ = conn_->on_read(ec);
          if (ec) {
             logger_.trace("reader_op (3)", ec);
             conn_->cancel(operation::run);
@@ -500,21 +494,17 @@ public:
     *
     *  @param ex Executor on which connection operation will run.
     *  @param ctx SSL context.
-    *  @param max_read_size Maximum read size that is passed to
-    *  the internal `asio::dynamic_buffer` constructor.
     */
    explicit
    basic_connection(
       executor_type ex,
-      asio::ssl::context ctx = asio::ssl::context{asio::ssl::context::tlsv12_client},
-      std::size_t max_read_size = (std::numeric_limits<std::size_t>::max)())
+      asio::ssl::context ctx = asio::ssl::context{asio::ssl::context::tlsv12_client})
    : ctx_{std::move(ctx)}
    , stream_{std::make_unique<next_layer_type>(ex, ctx_)}
    , writer_timer_{ex}
    , receive_channel_{ex, 256}
    , resv_{ex}
    , health_checker_{ex}
-   , dbuf_{read_buffer_, max_read_size}
    {
       set_receive_response(ignore);
       writer_timer_.expires_at((std::chrono::steady_clock::time_point::max)());
@@ -524,9 +514,8 @@ public:
    explicit
    basic_connection(
       asio::io_context& ioc,
-      asio::ssl::context ctx = asio::ssl::context{asio::ssl::context::tlsv12_client},
-      std::size_t max_read_size = (std::numeric_limits<std::size_t>::max)())
-   : basic_connection(ioc.get_executor(), std::move(ctx), max_read_size)
+      asio::ssl::context ctx = asio::ssl::context{asio::ssl::context::tlsv12_client})
+   : basic_connection(ioc.get_executor(), std::move(ctx))
    { }
 
    /** @brief Starts underlying connection operations.
@@ -1124,13 +1113,13 @@ private:
       }
 
       on_push_ = false;
-      dbuf_.consume(parser_.get_consumed());
+      read_buffer_.erase(0, parser_.get_consumed());
       auto const res = std::make_pair(t, parser_.get_consumed());
       parser_.reset();
       return res;
    }
 
-   parse_ret_type on_read(std::string_view data, system::error_code& ec)
+   parse_ret_type on_read(system::error_code& ec)
    {
       // We arrive here in two states:
       //
@@ -1146,7 +1135,7 @@ private:
          on_push_ = is_next_push();
 
       if (on_push_) {
-         if (!resp3::parse(parser_, data, receive_adapter_, ec))
+         if (!resp3::parse(parser_, read_buffer_, receive_adapter_, ec))
             return std::make_pair(parse_result::needs_more, 0);
 
          if (ec)
@@ -1160,7 +1149,7 @@ private:
       BOOST_ASSERT(reqs_.front() != nullptr);
       BOOST_ASSERT(reqs_.front()->expected_responses_ != 0);
 
-      if (!resp3::parse(parser_, data, reqs_.front()->adapter_, ec))
+      if (!resp3::parse(parser_, read_buffer_, reqs_.front()->adapter_, ec))
          return std::make_pair(parse_result::needs_more, 0);
 
       if (ec) {
@@ -1203,11 +1192,8 @@ private:
    resp3_handshaker_type handshaker_;
    receiver_adapter_type receive_adapter_;
 
-   using dyn_buffer_type = asio::dynamic_string_buffer<char, std::char_traits<char>, std::allocator<char>>;
-
    config cfg_;
    std::string read_buffer_;
-   dyn_buffer_type dbuf_;
    std::string write_buffer_;
    reqs_type reqs_;
    resp3::parser parser_{};
@@ -1235,15 +1221,13 @@ public:
    explicit
    connection(
       executor_type ex,
-      asio::ssl::context ctx = asio::ssl::context{asio::ssl::context::tlsv12_client},
-      std::size_t max_read_size = (std::numeric_limits<std::size_t>::max)());
+      asio::ssl::context ctx = asio::ssl::context{asio::ssl::context::tlsv12_client});
 
    /// Contructs from a context.
    explicit
    connection(
       asio::io_context& ioc,
-      asio::ssl::context ctx = asio::ssl::context{asio::ssl::context::tlsv12_client},
-      std::size_t max_read_size = (std::numeric_limits<std::size_t>::max)());
+      asio::ssl::context ctx = asio::ssl::context{asio::ssl::context::tlsv12_client});
 
    /// Returns the underlying executor.
    executor_type get_executor() noexcept
