@@ -199,4 +199,29 @@ BOOST_AUTO_TEST_CASE(issue_210_no_nested)
       exit(EXIT_FAILURE);
    }
 }
+// char const* wire = "*6\r\n+orange\r\n+apple\r\n_\r\n+two\r\n+three\r\n+orange\r\n";
+// $ ./test/boost_redis_test_low_level_sync_sans_io --run_test=issue_233_array_with_nil
+// Running 1 test case...
+// : Got RESP3 null. [boost.redis:15]
+//
+BOOST_AUTO_TEST_CASE(issue_233_array_with_nil)
+{
+   try {
+      result<std::vector<std::optional<std::string>>> resp;
+
+      char const* wire = "*6\r\n+orange\r\n+apple\r\n_\r\n+two\r\n+three\r\n+orange\r\n";
+      deserialize(wire, adapt2(resp));
+
+      for (auto const& e: resp.value()) {
+         if (e)
+            std::cout << e.value() << std::endl;
+         else
+            std::cout << "null" << std::endl;
+      }
+
+   } catch (std::exception const& e) {
+      std::cerr << e.what() << std::endl;
+      exit(EXIT_FAILURE);
+   }
+}
 
